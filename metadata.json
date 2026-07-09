@@ -1,0 +1,6 @@
+{
+  "name": "Daily Checklist",
+  "description": "A versatile todo and daily habits checklist app with automated daily completion reset.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
