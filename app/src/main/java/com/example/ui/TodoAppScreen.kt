@@ -1240,7 +1240,7 @@ fun StatisticsTab(
                             ),
                             shape = RoundedCornerShape(28.dp)
                         )
-                        .padding(22.dp)
+                        .padding(horizontal = 14.dp, vertical = 22.dp)
                 ) {
                     Column {
                         Row(
@@ -1274,7 +1274,7 @@ fun StatisticsTab(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(120.dp),
+                                .height(130.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.Bottom
                         ) {
@@ -1300,9 +1300,11 @@ fun StatisticsTab(
                                 ) {
                                     Text(
                                         text = "${(value * 100).toInt()}%",
-                                        style = MaterialTheme.typography.labelSmall,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = if (idx == routineStats.lastIndex) 9.sp else 10.sp),
                                         color = if (idx == routineStats.lastIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Box(
@@ -1321,9 +1323,11 @@ fun StatisticsTab(
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
                                         text = daysOfWeek[idx],
-                                        style = MaterialTheme.typography.labelSmall,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = if (idx == routineStats.lastIndex) 10.sp else 11.sp),
                                         fontWeight = if (idx == routineStats.lastIndex) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (idx == routineStats.lastIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (idx == routineStats.lastIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -1362,7 +1366,7 @@ fun StatisticsTab(
                             ),
                             shape = RoundedCornerShape(28.dp)
                         )
-                        .padding(22.dp)
+                        .padding(horizontal = 14.dp, vertical = 22.dp)
                 ) {
                     Column {
                         Row(
@@ -1396,7 +1400,7 @@ fun StatisticsTab(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(120.dp),
+                                .height(130.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.Bottom
                         ) {
@@ -1425,9 +1429,11 @@ fun StatisticsTab(
                                 ) {
                                     Text(
                                         text = "${minutes}m",
-                                        style = MaterialTheme.typography.labelSmall,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = if (idx == focusStats.lastIndex) 9.sp else 10.sp),
                                         color = if (idx == focusStats.lastIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Box(
@@ -1446,9 +1452,11 @@ fun StatisticsTab(
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
                                         text = daysOfWeek[idx],
-                                        style = MaterialTheme.typography.labelSmall,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = if (idx == focusStats.lastIndex) 10.sp else 11.sp),
                                         fontWeight = if (idx == focusStats.lastIndex) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (idx == focusStats.lastIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (idx == focusStats.lastIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
