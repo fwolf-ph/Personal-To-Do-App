@@ -1,7 +1,10 @@
 package com.example.ui
 
 import android.app.Application
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
@@ -43,78 +46,193 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         _focusTimerDurationSeconds.value = seconds
         if (!_isTimerRunning.value) {
             _timerTimeLeftSeconds.value = seconds
+            prefs.edit().putInt("timer_paused_left", -1).apply()
+        }
+    }
+
+    private fun scheduleAlarm(triggerAtMillis: Long) {
+        try {
+            val alarmManager = getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
+            if (alarmManager != null) {
+                val intent = Intent(getApplication(), TimerReceiver::class.java)
+                val pendingIntent = PendingIntent.getBroadcast(
+                    getApplication(),
+                    0,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setAndAllowWhileIdle(
+                        android.app.AlarmManager.RTC_WAKEUP,
+                        triggerAtMillis,
+                        pendingIntent
+                    )
+                } else {
+                    alarmManager.set(
+                        android.app.AlarmManager.RTC_WAKEUP,
+                        triggerAtMillis,
+                        pendingIntent
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun cancelAlarm() {
+        try {
+            val alarmManager = getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
+            if (alarmManager != null) {
+                val intent = Intent(getApplication(), TimerReceiver::class.java)
+                val pendingIntent = PendingIntent.getBroadcast(
+                    getApplication(),
+                    0,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                alarmManager.cancel(pendingIntent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun triggerForegroundCompletionEffects() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            Toast.makeText(getApplication(), "Der Fokus-Timer ist abgelaufen! Gut gemacht!", Toast.LENGTH_LONG).show()
+        }
+
+        // Vibrate
+        try {
+            val vibrator = getApplication<Application>().getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            if (vibrator != null && vibrator.hasVibrator()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(android.os.VibrationEffect.createOneShot(1000, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(1000)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Play sound
+        try {
+            val notificationUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+            val ringtone = android.media.RingtoneManager.getRingtone(getApplication(), notificationUri)
+            ringtone?.play()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun startTimerLoop(startTimestamp: Long, secondsAtStart: Int) {
+        _isTimerRunning.value = true
+        timerJob?.cancel()
+        timerJob = viewModelScope.launch {
+            try {
+                while (_isTimerRunning.value) {
+                    val elapsed = (System.currentTimeMillis() - startTimestamp) / 1000
+                    val timeLeft = maxOf(0, secondsAtStart - elapsed.toInt())
+                    _timerTimeLeftSeconds.value = timeLeft
+                    
+                    val totalElapsed = secondsAtStart - timeLeft
+                    val lastAccumulated = prefs.getInt("timer_accumulated_stats_seconds", 0)
+                    val delta = totalElapsed - lastAccumulated
+                    if (delta > 0) {
+                        addFocusTime(delta)
+                        prefs.edit().putInt("timer_accumulated_stats_seconds", totalElapsed).apply()
+                    }
+
+                    if (timeLeft <= 0) {
+                        _isTimerRunning.value = false
+                        _timerTimeLeftSeconds.value = _focusTimerDurationSeconds.value
+                        prefs.edit()
+                            .putBoolean("timer_is_running", false)
+                            .putInt("timer_accumulated_stats_seconds", 0)
+                            .putInt("timer_paused_left", -1)
+                            .apply()
+                        cancelAlarm()
+                        triggerForegroundCompletionEffects()
+                        break
+                    }
+                    delay(500)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
     fun startTimer() {
         if (_isTimerRunning.value) return
-        _isTimerRunning.value = true
-        timerJob?.cancel()
-        timerJob = viewModelScope.launch {
-            var currentLeft = _timerTimeLeftSeconds.value ?: _focusTimerDurationSeconds.value
-            var elapsedSeconds = 0
-            try {
-                while (currentLeft > 0 && _isTimerRunning.value) {
-                    delay(1000)
-                    currentLeft--
-                    _timerTimeLeftSeconds.value = currentLeft
-                    elapsedSeconds++
-                    if (elapsedSeconds >= 60) {
-                        addFocusTime(60)
-                        elapsedSeconds = 0
-                    }
-                }
-                if (currentLeft == 0) {
-                    _timerTimeLeftSeconds.value = _focusTimerDurationSeconds.value
-                    _isTimerRunning.value = false
-                    
-                    // Show Toast message
-                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                        Toast.makeText(getApplication(), "Der Fokus-Timer ist abgelaufen! Gut gemacht!", Toast.LENGTH_LONG).show()
-                    }
-
-                    // Vibrate device
-                    try {
-                        val vibrator = getApplication<Application>().getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
-                        if (vibrator != null && vibrator.hasVibrator()) {
-                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                                vibrator.vibrate(android.os.VibrationEffect.createOneShot(1000, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
-                            } else {
-                                @Suppress("DEPRECATION")
-                                vibrator.vibrate(1000)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-
-                    // Play sound
-                    try {
-                        val notificationUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                        val ringtone = android.media.RingtoneManager.getRingtone(getApplication(), notificationUri)
-                        ringtone?.play()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            } finally {
-                if (elapsedSeconds > 0) {
-                    addFocusTime(elapsedSeconds)
-                }
-            }
-        }
+        val secondsLeft = _timerTimeLeftSeconds.value ?: _focusTimerDurationSeconds.value
+        val startTime = System.currentTimeMillis()
+        
+        prefs.edit()
+            .putBoolean("timer_is_running", true)
+            .putLong("timer_start_timestamp", startTime)
+            .putInt("timer_seconds_at_start", secondsLeft)
+            .putInt("timer_accumulated_stats_seconds", 0)
+            .putInt("timer_paused_left", -1)
+            .apply()
+            
+        scheduleAlarm(startTime + secondsLeft * 1000L)
+        startTimerLoop(startTime, secondsLeft)
     }
 
     fun pauseTimer() {
         _isTimerRunning.value = false
         timerJob?.cancel()
         timerJob = null
+        cancelAlarm()
+
+        val secondsAtStart = prefs.getInt("timer_seconds_at_start", 0)
+        val lastAccumulated = prefs.getInt("timer_accumulated_stats_seconds", 0)
+        val currentLeft = _timerTimeLeftSeconds.value
+        if (currentLeft != null) {
+            val totalElapsed = secondsAtStart - currentLeft
+            val delta = totalElapsed - lastAccumulated
+            if (delta > 0) {
+                addFocusTime(delta)
+            }
+            prefs.edit()
+                .putBoolean("timer_is_running", false)
+                .putInt("timer_accumulated_stats_seconds", 0)
+                .putInt("timer_paused_left", currentLeft)
+                .apply()
+        } else {
+            prefs.edit()
+                .putBoolean("timer_is_running", false)
+                .putInt("timer_accumulated_stats_seconds", 0)
+                .putInt("timer_paused_left", -1)
+                .apply()
+        }
     }
 
     fun resetTimer() {
         _isTimerRunning.value = false
         timerJob?.cancel()
         timerJob = null
+        cancelAlarm()
+
+        val secondsAtStart = prefs.getInt("timer_seconds_at_start", 0)
+        val lastAccumulated = prefs.getInt("timer_accumulated_stats_seconds", 0)
+        val currentLeft = _timerTimeLeftSeconds.value
+        if (currentLeft != null) {
+            val totalElapsed = secondsAtStart - currentLeft
+            val delta = totalElapsed - lastAccumulated
+            if (delta > 0) {
+                addFocusTime(delta)
+            }
+        }
+        prefs.edit()
+            .putBoolean("timer_is_running", false)
+            .putInt("timer_accumulated_stats_seconds", 0)
+            .putInt("timer_paused_left", -1)
+            .apply()
         _timerTimeLeftSeconds.value = _focusTimerDurationSeconds.value
     }
 
@@ -213,6 +331,42 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 _timeUntilMidnight.value = DateUtils.getRemainingTimeUntilMidnight()
                 repository.checkAndResetDailyTasks() // Also reset dynamically if midnight passes
                 delay(30000L) // every 30 seconds
+            }
+        }
+
+        // Restore timer state
+        viewModelScope.launch {
+            val isRunning = prefs.getBoolean("timer_is_running", false)
+            val startTimestamp = prefs.getLong("timer_start_timestamp", 0L)
+            val secondsAtStart = prefs.getInt("timer_seconds_at_start", 0)
+            val pausedLeft = prefs.getInt("timer_paused_left", -1)
+
+            if (isRunning && startTimestamp > 0L && secondsAtStart > 0) {
+                val elapsed = (System.currentTimeMillis() - startTimestamp) / 1000
+                if (elapsed >= secondsAtStart) {
+                    // Timer finished in background
+                    val lastAccumulated = prefs.getInt("timer_accumulated_stats_seconds", 0)
+                    val finalDelta = maxOf(0, secondsAtStart - lastAccumulated)
+                    if (finalDelta > 0) {
+                        addFocusTime(finalDelta)
+                    }
+                    prefs.edit()
+                        .putBoolean("timer_is_running", false)
+                        .putInt("timer_accumulated_stats_seconds", 0)
+                        .putInt("timer_paused_left", -1)
+                        .apply()
+                    _timerTimeLeftSeconds.value = _focusTimerDurationSeconds.value
+                    _isTimerRunning.value = false
+                } else {
+                    // Timer is still running
+                    val timeLeft = secondsAtStart - elapsed.toInt()
+                    _timerTimeLeftSeconds.value = timeLeft
+                    startTimerLoop(startTimestamp, secondsAtStart)
+                }
+            } else if (pausedLeft > 0) {
+                _timerTimeLeftSeconds.value = pausedLeft
+            } else {
+                _timerTimeLeftSeconds.value = _focusTimerDurationSeconds.value
             }
         }
     }
